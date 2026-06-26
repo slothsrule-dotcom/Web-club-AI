@@ -2,59 +2,95 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title><web> AI</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.trycloudflare.com https://cdn.jsdelivr.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.com; style-src 'self' 'unsafe-inline';">
-    <style>
-        body { font-family: sans-serif; display: flex; margin: 0; height: 100vh; background: #fafafa; }
-        #sidebar { width: 260px; background: #f0f0f0; padding: 20px; border-right: 1px solid #ddd; overflow-y: auto; display: flex; flex-direction: column; }
-        #main-chat { flex: 1; display: flex; flex-direction: column; padding: 20px; }
-        #output { flex: 1; background: white; padding: 15px; border-radius: 5px; border: 1px solid #ddd; overflow-y: auto; margin-bottom: 10px; }
-        .history-wrapper { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; background: white; border-radius: 4px; border: 1px solid #e0e0e0; padding: 5px 8px; }
-        .history-item { flex: 1; cursor: pointer; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .delete-btn { background: none; border: none; color: #ff4d4d; cursor: pointer; font-weight: bold; margin-left: 5px; }
-        .msg { padding: 10px; margin-bottom: 8px; border-radius: 6px; max-width: 85%; }
-        .user-msg { background: #e3f2fd; align-self: flex-end; margin-left: auto; }
-        .ai-msg { background: #f5f5f5; align-self: flex-start; }
-        #new-chat-btn { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; margin-bottom: 15px; width: 100%; font-weight: bold; }
-        pre, code { white-space: pre-wrap; word-break: break-all; }
-    </style>
+    <title>Webby AI</title>
     <script src="./marked.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
 </head>
 <body>
 
     <div id="sidebar">
+        <img id="logo" src="logo.png">
         <button id="new-chat-btn" onclick="startNewChat()">+ New Chat</button>
         <h3>Past Chats</h3>
         <div id="historyList">Log in to view history</div>
+
+        <div id="auth-section" style="margin-bottom: 15px;">
+            <input type="text" id="username" placeholder="Username" autocomplete="off"><br>
+            <input type="password" id="password" placeholder="Password" autocomplete="off"><br>
+            <button onclick="login()">Login</button> <br>
+            <button onclick="signup()">Sign Up</button> <br>
+            <span id="userGreeting" style="margin-left: 10px; font-weight: bold;"></span>
+        </div>
+        <button id="logout-btn" onclick="logout()">Log Out</button>
     </div>
 
     <div id="main-chat">
-        <div id="auth-section" style="margin-bottom: 15px;">
-            <input type="text" id="username" placeholder="Username">
-            <input type="password" id="password" placeholder="Password">
-            <button onclick="login()">Login</button>
-            <button onclick="signup()">Sign Up</button>
-            <span id="userGreeting" style="margin-left: 10px; font-weight: bold;"></span>
-        </div>
-
-        <div id="output">Welcome! Please sign up or log in to start saving your chat history.</div>
+        <div id="output">Please sign up or log in to start chatting.</div>
        
         <div style="display: flex;">
-            <input type="text" id="userInput" placeholder="Ask a web design question..." style="flex: 1; padding: 10px;">
-            <button onclick="askAI()" style="padding: 10px 20px;">Send</button>
+            <input type="text" id="userInput" autocomplete="off" placeholder="Ask Webby..." style="flex: 1; padding: 10px;">
+            <button onclick="askAI()" id="userSend">Send</button>
         </div>
     </div>
 
     <script>
         // PASTE YOUR CLOUDFLARE BACKEND URL HERE
-        // Paste your link here (with or without a slash, doesn't matter anymore!)
-let RAW_URL = "https://handled-brunswick-invisible-developed.trycloudflare.com";
+        let RAW_URL = "https://handled-brunswick-invisible-developed.trycloudflare.com";
 
-// This automatically strips away any trailing slash if it exists
-const BACKEND_URL = RAW_URL.endsWith('/') ? RAW_URL.slice(0, -1) : RAW_URL;
+        // This automatically strips away any trailing slash if it exists
+        const BACKEND_URL = RAW_URL.endsWith('/') ? RAW_URL.slice(0, -1) : RAW_URL;
 
-let currentUser = "";
-let activeThreadId = "";
+        let currentUser = "";
+        let activeThreadId = "";
+
+        // Check browser storage on load to persist the session
+        window.onload = function() {
+            const savedUser = localStorage.getItem('webby_user');
+            if (savedUser) {
+                currentUser = savedUser;
+                activeThreadId = localStorage.getItem('webby_thread') || "";
+                
+                document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
+                document.getElementById('auth-section').style.display = "none";
+                document.getElementById('logout-btn').style.display = "block";
+                
+                if (activeThreadId) {
+                    loadFullThread(activeThreadId);
+                } else {
+                    startNewChat();
+                }
+                loadThreads();
+            } else {
+                showLoginState();
+            }
+        };
+
+        function showLoginState() {
+            currentUser = "";
+            activeThreadId = "";
+            document.getElementById('username').value = "";
+            document.getElementById('password').value = "";
+            document.getElementById('userGreeting').innerText = "";
+            document.getElementById('auth-section').style.display = "block";
+            document.getElementById('auth-section').style.visibility = "visible";
+            document.getElementById('logout-btn').style.display = "none";
+            document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Please sign up or log in to start chatting.</div>";
+            document.getElementById('historyList').innerHTML = "<i style='color:gray;'>Log in to view history</i>";
+        }
+
+        function logout() {
+            localStorage.clear();
+            showLoginState();
+        }
+
+        // Helper function to turn "font-in-css-title" into "Font In Css Title"
+        function formatThreadTitle(titleString) {
+            if (!titleString) return "New Conversation";
+            let clean = titleString.replace(/([A-Z])/g, ' $1');
+            clean = clean.replace(/[-_]/g, ' ');
+            return clean.trim().replace(/\b\w/g, char => char.toUpperCase());
+        }
 
         async function signup() {
             const u = document.getElementById('username').value;
@@ -80,8 +116,13 @@ let activeThreadId = "";
             const data = await res.json();
             if(data.success) {
                 currentUser = data.username;
+                
+                // Save session to LocalStorage
+                localStorage.setItem('webby_user', currentUser);
+                
                 document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
-                document.getElementById('auth-section').style.visibility = "hidden";
+                document.getElementById('auth-section').style.display = "none";
+                document.getElementById('logout-btn').style.display = "block";
                 startNewChat();
                 loadThreads();
             } else {
@@ -90,8 +131,9 @@ let activeThreadId = "";
         }
 
         function startNewChat() {
-            activeThreadId = ""; // Wiping the active ID forces backend to start a new thread
-            document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Started a brand new conversation! Ask Webbie anything.</div>";
+            activeThreadId = ""; 
+            localStorage.removeItem('webby_thread'); // Clear thread focus in storage
+            document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Started a brand new conversation! Ask Webby anything.</div>";
         }
 
         async function loadThreads() {
@@ -99,21 +141,27 @@ let activeThreadId = "";
             const threads = await res.json();
             const list = document.getElementById('historyList');
             list.innerHTML = threads.length === 0 ? "<i style='color:gray;'>No history yet.</i>" : "";
-           
+            
             threads.forEach(thread => {
                 const wrapper = document.createElement('div');
                 wrapper.className = "history-wrapper";
 
                 const item = document.createElement('div');
                 item.className = "history-item";
-                item.innerText = thread.title;
+                
+                // Highlight active thread visually if it matches
+                if(thread.id == activeThreadId) {
+                    item.style.fontWeight = "bold";
+                }
+
+                item.innerText = formatThreadTitle(thread.title || thread.name);
                 item.onclick = () => loadFullThread(thread.id);
 
                 const delBtn = document.createElement('button');
                 delBtn.className = "delete-btn";
                 delBtn.innerText = "✕";
                 delBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevents opening the chat while trying to delete it
+                    e.stopPropagation(); 
                     deleteThread(thread.id);
                 };
 
@@ -125,6 +173,8 @@ let activeThreadId = "";
 
         async function loadFullThread(id) {
             activeThreadId = id;
+            localStorage.setItem('webby_thread', id); // Save active thread state
+            
             const res = await fetch(`${BACKEND_URL}/api/messages/${id}`);
             const messages = await res.json();
             const outputDiv = document.getElementById('output');
@@ -137,6 +187,7 @@ let activeThreadId = "";
                 outputDiv.appendChild(bubble);
             });
             outputDiv.scrollTop = outputDiv.scrollHeight;
+            loadThreads(); // Refresh thread list highlight styling
         }
 
         async function deleteThread(id) {
@@ -150,17 +201,15 @@ let activeThreadId = "";
             if(!currentUser) return alert("Please log in first!");
             const input = document.getElementById('userInput').value;
             if(!input.trim()) return;
-           
+            
             const outputDiv = document.getElementById('output');
-           
-            // Append user message onto the window locally
+            
             const userBubble = document.createElement('div');
             userBubble.className = 'msg user-msg';
             userBubble.innerText = input;
             outputDiv.appendChild(userBubble);
             document.getElementById('userInput').value = "";
 
-            // Create placeholders for streaming AI response
             const aiBubble = document.createElement('div');
             aiBubble.className = 'msg ai-msg';
             aiBubble.innerText = "Thinking...";
@@ -185,15 +234,15 @@ let activeThreadId = "";
 
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split("\n");
-                    buffer = lines.pop(); // Save incomplete line for next iteration
+                    buffer = lines.pop(); 
 
                     for (const line of lines) {
                         if (line.trim() !== "") {
                             try {
                                 const parsedJSON = JSON.parse(line);
-                                activeThreadId = parsedJSON.thread_id; // Lock the session ID
+                                activeThreadId = parsedJSON.thread_id; 
+                                localStorage.setItem('webby_thread', activeThreadId); // Save mid-stream tracking ID
 
-                                // Parse internal Ollama chunks
                                 const linesInner = parsedJSON.text.split("\n");
                                 for(const l of linesInner) {
                                     if(l.trim() !== "") {
@@ -207,7 +256,7 @@ let activeThreadId = "";
                         }
                     }
                 }
-                loadThreads(); // Refresh list to catch title updates
+                loadThreads(); 
             } catch (err) {
                 aiBubble.innerText = "Error streaming from server.";
                 console.error(err);
