@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title><web> AI</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.trycloudflare.com https://cdn.jsdelivr.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.com; style-src 'self' 'unsafe-inline';">
+    <style>
+        body { font-family: sans-serif; display: flex; margin: 0; height: 100vh; background: #fafafa; }
+        #sidebar { width: 260px; background: #f0f0f0; padding: 20px; border-right: 1px solid #ddd; overflow-y: auto; display: flex; flex-direction: column; }
+        #main-chat { flex: 1; display: flex; flex-direction: column; padding: 20px; }
+        #output { flex: 1; background: white; padding: 15px; border-radius: 5px; border: 1px solid #ddd; overflow-y: auto; margin-bottom: 10px; }
+        .history-wrapper { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; background: white; border-radius: 4px; border: 1px solid #e0e0e0; padding: 5px 8px; }
+        .history-item { flex: 1; cursor: pointer; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .delete-btn { background: none; border: none; color: #ff4d4d; cursor: pointer; font-weight: bold; margin-left: 5px; }
+        .msg { padding: 10px; margin-bottom: 8px; border-radius: 6px; max-width: 85%; }
+        .user-msg { background: #e3f2fd; align-self: flex-end; margin-left: auto; }
+        .ai-msg { background: #f5f5f5; align-self: flex-start; }
+        #new-chat-btn { background: #007bff; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; margin-bottom: 15px; width: 100%; font-weight: bold; }
+        pre, code { white-space: pre-wrap; word-break: break-all; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+    <div id="sidebar">
+        <button id="new-chat-btn" onclick="startNewChat()">+ New Chat</button>
+        <h3>Past Chats</h3>
+        <div id="historyList">Log in to view history</div>
+    </div>
+
+    <div id="main-chat">
+        <div id="auth-section" style="margin-bottom: 15px;">
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <button onclick="signup()">Sign Up</button>
+            <span id="userGreeting" style="margin-left: 10px; font-weight: bold;"></span>
+        </div>
+
+        <div id="output">Welcome! Please sign up or log in to start saving your chat history.</div>
+       
+        <div style="display: flex;">
+            <input type="text" id="userInput" placeholder="Ask a web design question..." style="flex: 1; padding: 10px;">
+            <button onclick="askAI()" style="padding: 10px 20px;">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // PASTE YOUR CLOUDFLARE BACKEND URL HERE
+        // Paste your link here (with or without a slash, doesn't matter anymore!)
+let RAW_URL = "https://handled-brunswick-invisible-developed.trycloudflare.com";
+
+// This automatically strips away any trailing slash if it exists
+const BACKEND_URL = RAW_URL.endsWith('/') ? RAW_URL.slice(0, -1) : RAW_URL;
+
+let currentUser = "";
+let activeThreadId = "";
+
+        async function signup() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if(!u || !p) return alert("Please enter both credentials!");
+            const res = await fetch(`${BACKEND_URL}/api/signup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            alert(data.success ? "Account created! You can now log in." : data.error);
+        }
+
+        async function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const res = await fetch(`${BACKEND_URL}/api/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            if(data.success) {
+                currentUser = data.username;
+                document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
+                document.getElementById('auth-section').style.visibility = "hidden";
+                startNewChat();
+                loadThreads();
+            } else {
+                alert(data.error);
+            }
+        }
+
+        function startNewChat() {
+            activeThreadId = ""; // Wiping the active ID forces backend to start a new thread
+            document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Started a brand new conversation! Ask Webbie anything.</div>";
+        }
+
+        async function loadThreads() {
+            const res = await fetch(`${BACKEND_URL}/api/threads/${currentUser}`);
+            const threads = await res.json();
+            const list = document.getElementById('historyList');
+            list.innerHTML = threads.length === 0 ? "<i style='color:gray;'>No history yet.</i>" : "";
+           
+            threads.forEach(thread => {
+                const wrapper = document.createElement('div');
+                wrapper.className = "history-wrapper";
+
+                const item = document.createElement('div');
+                item.className = "history-item";
+                item.innerText = thread.title;
+                item.onclick = () => loadFullThread(thread.id);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = "delete-btn";
+                delBtn.innerText = "✕";
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); // Prevents opening the chat while trying to delete it
+                    deleteThread(thread.id);
+                };
+
+                wrapper.appendChild(item);
+                wrapper.appendChild(delBtn);
+                list.appendChild(wrapper);
+            });
+        }
+
+        async function loadFullThread(id) {
+            activeThreadId = id;
+            const res = await fetch(`${BACKEND_URL}/api/messages/${id}`);
+            const messages = await res.json();
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = "";
+
+            messages.forEach(msg => {
+                const bubble = document.createElement('div');
+                bubble.className = msg.role === 'user' ? 'msg user-msg' : 'msg ai-msg';
+                bubble.innerHTML = msg.role === 'user' ? msg.content : marked.parse(msg.content);
+                outputDiv.appendChild(bubble);
+            });
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+
+        async function deleteThread(id) {
+            if(!confirm("Delete this conversation?")) return;
+            await fetch(`${BACKEND_URL}/api/threads/${id}`, { method: "DELETE" });
+            if(activeThreadId === id) startNewChat();
+            loadThreads();
+        }
+
+        async function askAI() {
+            if(!currentUser) return alert("Please log in first!");
+            const input = document.getElementById('userInput').value;
+            if(!input.trim()) return;
+           
+            const outputDiv = document.getElementById('output');
+           
+            // Append user message onto the window locally
+            const userBubble = document.createElement('div');
+            userBubble.className = 'msg user-msg';
+            userBubble.innerText = input;
+            outputDiv.appendChild(userBubble);
+            document.getElementById('userInput').value = "";
+
+            // Create placeholders for streaming AI response
+            const aiBubble = document.createElement('div');
+            aiBubble.className = 'msg ai-msg';
+            aiBubble.innerText = "Thinking...";
+            outputDiv.appendChild(aiBubble);
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: currentUser, prompt: input, thread_id: activeThreadId })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let completeText = "";
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop(); // Save incomplete line for next iteration
+
+                    for (const line of lines) {
+                        if (line.trim() !== "") {
+                            try {
+                                const parsedJSON = JSON.parse(line);
+                                activeThreadId = parsedJSON.thread_id; // Lock the session ID
+
+                                // Parse internal Ollama chunks
+                                const linesInner = parsedJSON.text.split("\n");
+                                for(const l of linesInner) {
+                                    if(l.trim() !== "") {
+                                        const p = JSON.parse(l);
+                                        completeText += p.response;
+                                        aiBubble.innerHTML = marked.parse(completeText);
+                                    }
+                                }
+                                outputDiv.scrollTop = outputDiv.scrollHeight;
+                            } catch(e) {}
+                        }
+                    }
+                }
+                loadThreads(); // Refresh list to catch title updates
+            } catch (err) {
+                aiBubble.innerText = "Error streaming from server.";
+                console.error(err);
+            }
+        }
+    </script>
+</body>
+</html>
