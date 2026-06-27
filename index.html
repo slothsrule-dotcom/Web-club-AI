@@ -15,13 +15,6 @@
         <h3>Past Chats</h3>
         <div id="historyList">Log in to view history</div>
 
-        <label for="personaSelect" style="color: white; font-weight: bold;">Choose Assistant:</label>
-<select id="personaSelect" style="padding: 5px; margin-bottom: 10px; width: 100%;">
-    <option value="common">Webbie (General Assistant)</option>
-    <option value="webdev">Web Dev Expert (HTML/CSS/JS Master)</option>
-    <option value="python">Code Wizard (Python & Backend)</option>
-</select>
-
         <div id="auth-section" style="margin-bottom: 15px;">
             <input type="text" id="username" placeholder="Username" autocomplete="off"><br>
             <input type="password" id="password" placeholder="Password" autocomplete="off"><br>
@@ -41,241 +34,234 @@
         </div>
     </div>
 
-<script>
-    // PASTE YOUR CLOUDFLARE BACKEND URL HERE
-    let RAW_URL = "https://visitor-moderator-governmental-block.trycloudflare.com";
+    <script>
+        // PASTE YOUR CLOUDFLARE BACKEND URL HERE
+        let RAW_URL = "https://handled-brunswick-invisible-developed.trycloudflare.com";
 
-    // This automatically strips away any trailing slash if it exists
-    const BACKEND_URL = RAW_URL.endsWith('/') ? RAW_URL.slice(0, -1) : RAW_URL;
+        // This automatically strips away any trailing slash if it exists
+        const BACKEND_URL = RAW_URL.endsWith('/') ? RAW_URL.slice(0, -1) : RAW_URL;
 
-    let currentUser = "";
-    let activeThreadId = "";
+        let currentUser = "";
+        let activeThreadId = "";
 
-    // Check browser storage on load to persist the session
-    window.onload = function() {
-        const savedUser = localStorage.getItem('webby_user');
-        if (savedUser) {
-            currentUser = savedUser;
-            activeThreadId = localStorage.getItem('webby_thread') || "";
-            
-            document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
-            document.getElementById('auth-section').style.display = "none";
-            document.getElementById('logout-btn').style.display = "block";
-            
-            if (activeThreadId) {
-                loadFullThread(activeThreadId);
+        // Check browser storage on load to persist the session
+        window.onload = function() {
+            const savedUser = localStorage.getItem('webby_user');
+            if (savedUser) {
+                currentUser = savedUser;
+                activeThreadId = localStorage.getItem('webby_thread') || "";
+                
+                document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
+                document.getElementById('auth-section').style.display = "none";
+                document.getElementById('logout-btn').style.display = "block";
+                
+                if (activeThreadId) {
+                    loadFullThread(activeThreadId);
+                } else {
+                    startNewChat();
+                }
+                loadThreads();
             } else {
-                startNewChat();
+                showLoginState();
             }
-            loadThreads();
-        } else {
+        };
+
+        function showLoginState() {
+            currentUser = "";
+            activeThreadId = "";
+            document.getElementById('username').value = "";
+            document.getElementById('password').value = "";
+            document.getElementById('userGreeting').innerText = "";
+            document.getElementById('auth-section').style.display = "block";
+            document.getElementById('auth-section').style.visibility = "visible";
+            document.getElementById('logout-btn').style.display = "none";
+            document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Please sign up or log in to start chatting.</div>";
+            document.getElementById('historyList').innerHTML = "<i style='color:gray;'>Log in to view history</i>";
+        }
+
+        function logout() {
+            localStorage.clear();
             showLoginState();
         }
-    };
 
-    function showLoginState() {
-        currentUser = "";
-        activeThreadId = "";
-        document.getElementById('username').value = "";
-        document.getElementById('password').value = "";
-        document.getElementById('userGreeting').innerText = "";
-        document.getElementById('auth-section').style.display = "block";
-        document.getElementById('auth-section').style.visibility = "visible";
-        document.getElementById('logout-btn').style.display = "none";
-        document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Please sign up or log in to start chatting.</div>";
-        document.getElementById('historyList').innerHTML = "<i style='color:gray;'>Log in to view history</i>";
-    }
-
-    function logout() {
-        localStorage.clear();
-        showLoginState();
-    }
-
-    // Helper function to turn "font-in-css-title" into "Font In Css Title"
-    function formatThreadTitle(titleString) {
-        if (!titleString) return "New Conversation";
-        let clean = titleString.replace(/([A-Z])/g, ' $1');
-        clean = clean.replace(/[-_]/g, ' ');
-        return clean.trim().replace(/\b\w/g, char => char.toUpperCase());
-    }
-
-    async function signup() {
-        const u = document.getElementById('username').value;
-        const p = document.getElementById('password').value;
-        if(!u || !p) return alert("Please enter both credentials!");
-        const res = await fetch(`${BACKEND_URL}/api/signup`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: u, password: p })
-        });
-        const data = await res.json();
-        alert(data.success ? "Account created! You can now log in." : data.error);
-    }
-
-    async function login() {
-        const u = document.getElementById('username').value;
-        const p = document.getElementById('password').value;
-        const res = await fetch(`${BACKEND_URL}/api/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: u, password: p })
-        });
-        const data = await res.json();
-        if(data.success) {
-            currentUser = data.username;
-            
-            // Save session to LocalStorage
-            localStorage.setItem('webby_user', currentUser);
-            
-            document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
-            document.getElementById('auth-section').style.display = "none";
-            document.getElementById('logout-btn').style.display = "block";
-            startNewChat();
-            loadThreads();
-        } else {
-            alert(data.error);
+        // Helper function to turn "font-in-css-title" into "Font In Css Title"
+        function formatThreadTitle(titleString) {
+            if (!titleString) return "New Conversation";
+            let clean = titleString.replace(/([A-Z])/g, ' $1');
+            clean = clean.replace(/[-_]/g, ' ');
+            return clean.trim().replace(/\b\w/g, char => char.toUpperCase());
         }
-    }
 
-    function startNewChat() {
-        activeThreadId = ""; 
-        localStorage.removeItem('webby_thread'); // Clear thread focus in storage
-        document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Started a brand new conversation! Ask Webbie anything.</div>";
-    }
-
-    async function loadThreads() {
-        const res = await fetch(`${BACKEND_URL}/api/threads/${currentUser}`);
-        const threads = await res.json();
-        const list = document.getElementById('historyList');
-        list.innerHTML = threads.length === 0 ? "<i style='color:gray;'>No history yet.</i>" : "";
-        
-        threads.forEach(thread => {
-            const wrapper = document.createElement('div');
-            wrapper.className = "history-wrapper";
-
-            const item = document.createElement('div');
-            item.className = "history-item";
-            
-            // Highlight active thread visually if it matches
-            if(thread.id == activeThreadId) {
-                item.style.fontWeight = "bold";
-            }
-
-            item.innerText = formatThreadTitle(thread.title || thread.name);
-            item.onclick = () => loadFullThread(thread.id);
-
-            const delBtn = document.createElement('button');
-            delBtn.className = "delete-btn";
-            delBtn.innerText = "✕";
-            delBtn.onclick = (e) => {
-                e.stopPropagation(); 
-                deleteThread(thread.id);
-            };
-
-            wrapper.appendChild(item);
-            wrapper.appendChild(delBtn);
-            list.appendChild(wrapper);
-        });
-    }
-
-    async function loadFullThread(id) {
-        activeThreadId = id;
-        localStorage.setItem('webby_thread', id); // Save active thread state
-        
-        const res = await fetch(`${BACKEND_URL}/api/messages/${id}`);
-        const messages = await res.json();
-        const outputDiv = document.getElementById('output');
-        outputDiv.innerHTML = "";
-
-        messages.forEach(msg => {
-            const bubble = document.createElement('div');
-            bubble.className = msg.role === 'user' ? 'msg user-msg' : 'msg ai-msg';
-            bubble.innerHTML = msg.role === 'user' ? msg.content : marked.parse(msg.content);
-            outputDiv.appendChild(bubble);
-        });
-        outputDiv.scrollTop = outputDiv.scrollHeight;
-        loadThreads(); // Refresh thread list highlight styling
-    }
-
-    async function deleteThread(id) {
-        if(!confirm("Delete this conversation?")) return;
-        await fetch(`${BACKEND_URL}/api/threads/${id}`, { method: "DELETE" });
-        if(activeThreadId === id) startNewChat();
-        loadThreads();
-    }
-
-    async function askAI() {
-        if(!currentUser) return alert("Please log in first!");
-        const input = document.getElementById('userInput').value;
-        if(!input.trim()) return;
-        
-        // Grab the selected persona from your HTML selection element if it exists
-        const personaDropdown = document.getElementById('personaSelect');
-        const chosenPersona = personaDropdown ? personaDropdown.value : "common";
-        
-        const outputDiv = document.getElementById('output');
-        
-        const userBubble = document.createElement('div');
-        userBubble.className = 'msg user-msg';
-        userBubble.innerText = input;
-        outputDiv.appendChild(userBubble);
-        document.getElementById('userInput').value = "";
-
-        const aiBubble = document.createElement('div');
-        aiBubble.className = 'msg ai-msg';
-        aiBubble.innerText = "Thinking...";
-        outputDiv.appendChild(aiBubble);
-        outputDiv.scrollTop = outputDiv.scrollHeight;
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/chat`, {
+        async function signup() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if(!u || !p) return alert("Please enter both credentials!");
+            const res = await fetch(`${BACKEND_URL}/api/signup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    username: currentUser, 
-                    prompt: input, 
-                    thread_id: activeThreadId,
-                    persona: chosenPersona // Pass persona selection to backend
-                })
+                body: JSON.stringify({ username: u, password: p })
             });
+            const data = await res.json();
+            alert(data.success ? "Account created! You can now log in." : data.error);
+        }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let completeText = "";
-            let buffer = "";
+        async function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            const res = await fetch(`${BACKEND_URL}/api/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            if(data.success) {
+                currentUser = data.username;
+                
+                // Save session to LocalStorage
+                localStorage.setItem('webby_user', currentUser);
+                
+                document.getElementById('userGreeting').innerText = `Hello, ${currentUser}!`;
+                document.getElementById('auth-section').style.display = "none";
+                document.getElementById('logout-btn').style.display = "block";
+                startNewChat();
+                loadThreads();
+            } else {
+                alert(data.error);
+            }
+        }
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+        function startNewChat() {
+            activeThreadId = ""; 
+            localStorage.removeItem('webby_thread'); // Clear thread focus in storage
+            document.getElementById('output').innerHTML = "<div class='msg ai-msg'>Started a brand new conversation! Ask Webby anything.</div>";
+        }
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop(); 
+        async function loadThreads() {
+            const res = await fetch(`${BACKEND_URL}/api/threads/${currentUser}`);
+            const threads = await res.json();
+            const list = document.getElementById('historyList');
+            list.innerHTML = threads.length === 0 ? "<i style='color:gray;'>No history yet.</i>" : "";
+            
+            threads.forEach(thread => {
+                const wrapper = document.createElement('div');
+                wrapper.className = "history-wrapper";
 
-                for (const line of lines) {
-                    if (line.trim() !== "") {
-                        try {
-                            const parsedJSON = JSON.parse(line);
-                            activeThreadId = parsedJSON.thread_id; 
-                            localStorage.setItem('webby_thread', activeThreadId); // Save mid-stream tracking ID
+                const item = document.createElement('div');
+                item.className = "history-item";
+                
+                // Highlight active thread visually if it matches
+                if(thread.id == activeThreadId) {
+                    item.style.fontWeight = "bold";
+                }
 
-                            const linesInner = parsedJSON.text.split("\n");
-                            for(const l of linesInner) {
-                                if(l.trim() !== "") {
-                                    const p = JSON.parse(l);
-                                    completeText += p.response;
-                                    aiBubble.innerHTML = marked.parse(completeText);
+                item.innerText = formatThreadTitle(thread.title || thread.name);
+                item.onclick = () => loadFullThread(thread.id);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = "delete-btn";
+                delBtn.innerText = "✕";
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); 
+                    deleteThread(thread.id);
+                };
+
+                wrapper.appendChild(item);
+                wrapper.appendChild(delBtn);
+                list.appendChild(wrapper);
+            });
+        }
+
+        async function loadFullThread(id) {
+            activeThreadId = id;
+            localStorage.setItem('webby_thread', id); // Save active thread state
+            
+            const res = await fetch(`${BACKEND_URL}/api/messages/${id}`);
+            const messages = await res.json();
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = "";
+
+            messages.forEach(msg => {
+                const bubble = document.createElement('div');
+                bubble.className = msg.role === 'user' ? 'msg user-msg' : 'msg ai-msg';
+                bubble.innerHTML = msg.role === 'user' ? msg.content : marked.parse(msg.content);
+                outputDiv.appendChild(bubble);
+            });
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+            loadThreads(); // Refresh thread list highlight styling
+        }
+
+        async function deleteThread(id) {
+            if(!confirm("Delete this conversation?")) return;
+            await fetch(`${BACKEND_URL}/api/threads/${id}`, { method: "DELETE" });
+            if(activeThreadId === id) startNewChat();
+            loadThreads();
+        }
+
+        async function askAI() {
+            if(!currentUser) return alert("Please log in first!");
+            const input = document.getElementById('userInput').value;
+            if(!input.trim()) return;
+            
+            const outputDiv = document.getElementById('output');
+            
+            const userBubble = document.createElement('div');
+            userBubble.className = 'msg user-msg';
+            userBubble.innerText = input;
+            outputDiv.appendChild(userBubble);
+            document.getElementById('userInput').value = "";
+
+            const aiBubble = document.createElement('div');
+            aiBubble.className = 'msg ai-msg';
+            aiBubble.innerText = "Thinking...";
+            outputDiv.appendChild(aiBubble);
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: currentUser, prompt: input, thread_id: activeThreadId })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let completeText = "";
+                let buffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop(); 
+
+                    for (const line of lines) {
+                        if (line.trim() !== "") {
+                            try {
+                                const parsedJSON = JSON.parse(line);
+                                activeThreadId = parsedJSON.thread_id; 
+                                localStorage.setItem('webby_thread', activeThreadId); // Save mid-stream tracking ID
+
+                                const linesInner = parsedJSON.text.split("\n");
+                                for(const l of linesInner) {
+                                    if(l.trim() !== "") {
+                                        const p = JSON.parse(l);
+                                        completeText += p.response;
+                                        aiBubble.innerHTML = marked.parse(completeText);
+                                    }
                                 }
-                            }
-                            outputDiv.scrollTop = outputDiv.scrollHeight;
-                        } catch(e) {}
+                                outputDiv.scrollTop = outputDiv.scrollHeight;
+                            } catch(e) {}
+                        }
                     }
                 }
+                loadThreads(); 
+            } catch (err) {
+                aiBubble.innerText = "Error streaming from server.";
+                console.error(err);
             }
-            loadThreads(); 
-        } catch (err) {
-            aiBubble.innerText = "Error streaming from server.";
-            console.error(err);
         }
-    }
-</script>
+    </script>
+</body>
+</html>
