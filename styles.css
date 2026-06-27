@@ -76,12 +76,12 @@ body {
 .msg { 
     padding: 10px; 
     margin-bottom: 8px; 
-    border-radius: 6px; 
+    border-radius: 25px; 
     max-width: 85%; 
 }
 
 .user-msg { 
-    background: #e3f2fd; 
+    background: #84ADA7; 
     align-self: flex-end; 
     margin-left: auto; 
 }
@@ -170,6 +170,10 @@ body {
     width: 250px;
     text-align: center;
     cursor: pointer;
+}
+
+#main-chat {
+    border-radius: 50px;
 }
 
 pre, code { 
